@@ -324,6 +324,10 @@ private:
   void readSettings();
   void writeSettings();
 
+  // Shows the output window (fullscreen and/or test signal) only once the
+  // source canvas has rendered its first frame. See readSettings().
+  void deferOutputWindowRestore(bool fullScreen, bool testSignal);
+
   // OSC.
   void startOscReceiver();
 
