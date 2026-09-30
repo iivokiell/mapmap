@@ -264,6 +264,30 @@ void TextureGraphicsItem::_prePaint(QPainter* painter,
   Q_UNUSED(option);
   painter->beginNativePainting();
 
+  // Mirror the painter transform into the fixed-function GL matrices.
+  // QOpenGL2PaintEngineEx::beginNativePainting() only does this when Qt is NOT
+  // built with dynamic OpenGL (see qopenglpaintengine.cpp). Official Qt builds
+  // for Windows use dynamic GL, so there the projection stays at identity and
+  // every texture gets stretched over the whole viewport, showing a single texel
+  // (black or flat-colored canvas). Doing it here is harmless where Qt already
+  // did it, since the matrices are identical.
+  {
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    const QTransform& mtx = painter->deviceTransform();
+    const GLfloat modelView[16] = {
+      GLfloat(mtx.m11()), GLfloat(mtx.m12()), 0.0f, GLfloat(mtx.m13()),
+      GLfloat(mtx.m21()), GLfloat(mtx.m22()), 0.0f, GLfloat(mtx.m23()),
+      0.0f,               0.0f,               1.0f, 0.0f,
+      GLfloat(mtx.dx()),  GLfloat(mtx.dy()),  0.0f, GLfloat(mtx.m33())
+    };
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, viewport[2], viewport[3], 0, -999999, 999999);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadMatrixf(modelView);
+  }
+
   // Free any textures orphaned by destroyed sources now that a GL context is
   // current (see issue #229).
   Texture::deleteOrphanedTextures();
