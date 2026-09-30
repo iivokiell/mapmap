@@ -2464,8 +2464,35 @@ void MainWindow::startFullScreen()
 {
   // Remove canvas controls.
   displayControlsAction->setChecked(false);
-  // Display output window.
-  outputFullScreenAction->setChecked(true);
+  // Display output window (once the main canvases are initialized).
+  deferOutputWindowRestore(true, false);
+}
+
+void MainWindow::deferOutputWindowRestore(bool fullScreen, bool testSignal)
+{
+  if (!fullScreen && !testSignal)
+    return;
+
+  auto restore = [this, fullScreen, testSignal]() {
+    if (fullScreen)
+      outputFullScreenAction->setChecked(true);
+    if (testSignal)
+      displayTestSignalAction->setChecked(true);
+  };
+
+  QOpenGLWidget* sourceGLWidget = qobject_cast<QOpenGLWidget*>(sourceCanvas->viewport());
+  if (sourceGLWidget)
+  {
+    // Leave the frameSwapped() emission (we are inside the main window's
+    // composition) before creating a new top-level window.
+    connect(sourceGLWidget, &QOpenGLWidget::frameSwapped, this, [this, restore]() {
+      QTimer::singleShot(0, this, restore);
+    }, Qt::SingleShotConnection);
+  }
+  else
+  {
+    QTimer::singleShot(0, this, restore);
+  }
 }
 
 void MainWindow::createMenus()
@@ -2779,8 +2806,15 @@ void MainWindow::readSettings()
   outputWindow->restoreGeometry(settings.value("outputWindow").toByteArray());
 
   // new in 0.1.2:
-  outputFullScreenAction->setChecked(settings.value("displayOutputWindow", MM::DISPLAY_OUTPUT_WINDOW).toBool());
-  displayTestSignalAction->setChecked(settings.value("displayTestSignal", MM::DISPLAY_TEST_SIGNAL).toBool());
+  // Do not show the output window right away: readSettings() runs inside the
+  // MainWindow constructor, before the main window and its canvases are on
+  // screen. Showing the (fullscreen) output window at that point creates its
+  // OpenGL context first, which crashes some drivers at startup (seen with
+  // Intel's ig9icd64.dll on Windows when the output was left fullscreen on a
+  // projector). Restore it once the source canvas has rendered a frame instead.
+  deferOutputWindowRestore(
+      settings.value("displayOutputWindow", MM::DISPLAY_OUTPUT_WINDOW).toBool(),
+      settings.value("displayTestSignal", MM::DISPLAY_TEST_SIGNAL).toBool());
   displayControlsAction->setChecked(settings.value("displayControls", MM::DISPLAY_CONTROLS).toBool());
   outputWindow->setCanvasDisplayCrosshair(settings.value("displayControls", MM::DISPLAY_CONTROLS).toBool());
   oscListeningPort = settings.value("oscListeningPort", MM::DEFAULT_OSC_PORT).toInt();
