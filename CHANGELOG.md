@@ -2,6 +2,12 @@
 
 &nbsp;
 
+## Unreleased
+
+- Fix textures stretched over the whole canvas (black or flat-colored output) on Windows builds that use Qt's dynamic OpenGL.
+
+&nbsp;
+
 ## 2018-??-?? - MapMap 0.6.3
 
 TODO
